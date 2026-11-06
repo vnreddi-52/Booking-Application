@@ -1,7 +1,15 @@
 import csv 
 import sqlite3 as sq
 from models import StandardRoom, DeluxeRoom, SuiteRoom
-from database_access import create_query_room, insert_query_room, select_query_room
+from database_access import Queries
+from validations import get_date, validate_guest_input, get_room_type
+import math 
+
+ROOM_CAPACITY = {
+    "Standard": 2,
+    "Deluxe": 3,
+    "Suite": 5
+}
 
 conn = sq.connect("stay_easy.db")
 curr = conn.cursor()
@@ -26,7 +34,6 @@ def log_errors(errors):
             file.write("\n")
             
 def validate_data(data):
-    curr.execute(create_query_room)
     errors=[]
    
     for line, row in enumerate(data, start=1):
@@ -44,7 +51,7 @@ def validate_data(data):
         except ValueError:
             valid = False
             errors.append(f"Line {line} - Room no should be digit")
-            continue
+            continue 
 
         if room_type.capitalize() not in ("Standard", "Deluxe", "Suite"):
             valid = False
@@ -56,7 +63,7 @@ def validate_data(data):
             errors.append(f"Line {line} - Invalid Floor")
             continue
 
-        curr.execute(insert_query_room, (room_no, room_type, floor, 'True'))
+        curr.execute(Queries.insert_query_room, (room_no, room_type, floor, 'True'))
         if valid:
             type = room_type
             if room_type.capitalize() == "Standard":
@@ -72,33 +79,92 @@ def validate_data(data):
     conn.commit()
     log_errors(errors)
 
+def initialise_databases():
+    curr.execute("PRAGMA foreign_keys = OFF")
+    curr.execute("DROP TABLE IF EXISTS Booking")
+    curr.execute("DROP TABLE IF EXISTS Guest")
+    curr.execute("DROP TABLE IF EXISTS Room")
+    print("Dropped succesfully")
+
+    curr.execute(Queries.create_query_room)
+    rooms_data = list(load_rooms_csv())
+    validate_data(rooms_data)
+
+    curr.execute(Queries.create_query_guest)
+    curr.execute(Queries.insert_query_guest)
+
+    curr.execute(Queries.create_query_booking)
+    curr.execute(Queries.insert_query_booking)
+
+    conn.commit()
+    
+    curr.execute("PRAGMA foreign_keys = ON")
+
+def display_tables():
+    curr.execute(Queries.select_query_room)
+    for i in curr.fetchall():
+        print(i)
+
+    curr.execute(Queries.select_query_guest)
+    for i in curr.fetchall():
+        print(i)
+
+    curr.execute(Queries.select_query_booking)
+    for i in curr.fetchall():
+        print(i) 
+
 def display(obj):
     for i in obj:
         print(i)
 
-
 rooms_data = list(load_rooms_csv())
 validate_data(rooms_data)
 
-# display(StandardRoom_Obj)
-# display(DeluxeRoom_Obj)
-# display(SuiteRoom_Obj)
+def get_input_case1():
+    room_type = get_room_type("Enter the type of room needed: ").strip().capitalize()
+    check_in = get_date("Enter check_in date: ")
+    check_out = get_date("Enter check_out date: ")
+    while True:
+        try:
+            no_of_guests = int(input("Enter no of guests: "))
+            if no_of_guests>0:
+                break
+            print("NUmber of guests must be greater than 0")
+        except ValueError:
+            print("Enter a valid number")
+    return room_type, check_in, check_out, no_of_guests
 
-# print("Executing")
-# curr.execute(select_query_room)
-# for i in curr.fetchall():
-#     print(i)
+def check_availability(room_type, check_in, check_out, no_of_guests):
+    capacity = ROOM_CAPACITY[room_type]
+    required_rooms = math.ceil(no_of_guests/capacity)
+    curr.execute(Queries.room_availability_query, (room_type, check_in, check_out))
 
+    
+    # print("inpuuf:", room_type, check_in, check_out)
+    # print("sql eresulgt:", curr.fetchall())
+    available_rooms = [row[0] for row in curr.fetchall()] 
+    if len(available_rooms)>=required_rooms:
+        return available_rooms[:required_rooms]
+    return []
 
-# Functions 
+def alternative_rooms(room_type, check_in, check_out, no_of_guests):
+    alternatives = {}
 
-def check_availability():
-    type = input("Enter the type of room needed: ").strip().capitalize()
-    curr.execute(select_query_room)
-    for i in curr.fetchall():
-        if i[1].capitalize()==type.capitalize() and i[3]=='True':
-            rooms_available.append((i[0],i[1]))
-            print(i[0],i[1])
-
-
+    for r_type, r_capacity in ROOM_CAPACITY.items():
+        if r_type == room_type:
+            continue
+        required_rooms = required_rooms = math.ceil(no_of_guests/r_capacity)
+        curr.execute(Queries.room_availability_query, (r_type, check_in, check_out))
+        available_rooms = [row[0] for row in curr.fetchall()]
+        if len(available_rooms)>=required_rooms:
+            alternatives[r_type] = available_rooms[:required_rooms]
+    return alternatives
+    
+def create_booking():
+    # guest details
+    phone_no, name, email, no_of_guests, check_in, check_out = validate_guest_input()
+    
+    # create booking details
+    pass
+    
 

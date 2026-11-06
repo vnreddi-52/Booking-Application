@@ -75,6 +75,11 @@ class SuiteRoom(Room):
     def __str__(self):
         return f"{self.room_no} {self.room_type} {self.floor}"
 
+# no_of_guests INT NOT NULL,
+#                         status TEXT NOT NULL,
+#                         price REAL NOT NULL,
+#                         cancelled_date DATE
+
 class Booking:
-    def __init__(self,):
+    def __init__(self,date, guest, room, check_in, check_out, price,):
         pass
